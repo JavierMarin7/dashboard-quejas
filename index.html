@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<title>Visor de Quejas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
+<link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet"/>
+<link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet"/>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.fullscreen@2.4.0/Control.FullScreen.css" />
+<style>
+  body { background: #f6f8fb; }
+  header { background: #4065C5; }
+  
+  /* Altura del mapa (puedes seguir ajustando este valor) */
+  #map { height: 740px; } 
+
+  .kpi { min-width: 160px; }
+  .brand-slot { height: 46px; display: flex; align-items: center; gap: 8px; }
+  .brand-slot img { height: 40px; }
+  .legend { background: white; padding: .5rem .75rem; border-radius: .5rem; line-height: 1.2; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border-radius: 50%; }
+  
+  /* Altura estándar para los 3 gráficos más pequeños */
+  .chart-container { 
+    height: 360px; 
+    position: relative; 
+  }
+
+  /* NUEVA CLASE: Altura más grande solo para el gráfico de series temporales */
+  .chart-container-large {
+    height: 340px; /* <--- PUEDES CAMBIAR ESTE NÚMERO */    
+    position: relative;
+  }
+
+  /* Nuevo color para botones primarios */
+  .btn-primary {
+    background-color: #4065C5;
+    border-color: #4065C5;
+  }
+</style>
+</head>
+<body>
+
+<header class="py-2 mb-3">
+  <div class="container-fluid px-3 d-flex justify-content-between align-items-center">
+    <div class="brand-slot">
+      <img src="imagenes/logo_queja.jpg" alt="Queja">
+    </div>
+    <h1 class="h5 m-0 text-uppercase text-white">dashboard</h1>
+    <div style="width:110px"></div>
+  </div>
+</header>
+
+<div class="container-fluid px-3">
+  <div class="row g-3">
+    <div class="col-lg-3">
+      <div class="d-flex flex-column">
+        <div class="card p-3 mb-3">
+          <h5>Filtros</h5>
+          <div class="mb-2"><label class="form-label">Fecha desde</label><input type="date" id="fdesde" class="form-control"/></div>
+          <div class="mb-2"><label class="form-label">Fecha hasta</label><input type="date" id="fhasta" class="form-control"/></div>
+          <div class="mb-2"><label class="form-label">Clase</label><select id="fclase" class="form-select"><option value="">(todas)</option></select></div>
+          <div class="mb-2"><label class="form-label">Estado</label><select id="festado" class="form-select"><option value="">(todos)</option></select></div>
+          <div class="mb-2"><label class="form-label">Departamento</label><select id="fdepto" class="form-select"><option value="">(todos)</option></select></div>
+          <div class="mb-2"><label class="form-label">Municipio</label><select id="fmpio" class="form-select"><option value="">(todos)</option></select></div>
+          <div class="mb-2"><label class="form-label">Obra Nº</label><select id="fobra" class="form-select"><option value="">(todas)</option></select></div>
+          <div class="d-grid gap-2">
+            <button id="btnFiltrar" class="btn btn-primary">Aplicar filtros</button>
+            <button id="btnLimpiar" class="btn btn-secondary">Limpiar</button>
+            <button id="btnCSV" class="btn btn-outline-success">Descargar CSV (filtrado)</button>
+          </div>
+        </div>
+        
+        <div class="row g-3">
+            <div class="col-md-6 col-lg-12">
+                <div class="card p-3 h-100">
+                    <h5>KPIs</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                      <div class="card kpi p-2"><div class="small text-muted">Total</div><div id="k_total" class="h4 mb-0">0</div></div>
+                      <div class="card kpi p-2"><div class="small text-muted">% Calidad</div><div id="k_pct_calidad" class="h5 mb-0">0%</div></div>
+                      <div class="card kpi p-2"><div class="small text-muted">% Seguridad</div><div id="k_pct_seguridad" class="h5 mb-0">0%</div></div>
+                      <div class="card kpi p-2"><div class="small text-muted">% Ambiental</div><div id="k_pct_ambiental" class="h5 mb-0">0%</div></div>
+                      <div class="card kpi p-2"><div class="small text-muted">% Atención</div><div id="k_pct_atencion" class="h5 mb-0">0%</div></div>
+                      <div class="card kpi p-2"><div class="small text-muted">Últ. 24h</div><div id="k_24h" class="h5 mb-0">0</div></div>
+                      <div class="card kpi p-2"><div class="small text-muted">Últ. 7d</div><div id="k_7d" class="h5 mb-0">0</div></div>
+                      <div class="card kpi p-2"><div class="small text-muted">Últ. 30d</div><div id="k_30d" class="h5 mb-0">0</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-12">
+                <div class="card p-3 h-100">
+                    <h5>Controles de Datos</h5>
+                    <div class="mb-3"><label class="form-label">Auto-refresco</label><select id="autoRefresh" class="form-select"><option value="0">Apagado</option><option value="60">Cada 1 min</option><option value="300">Cada 5 min</option><option value="900">Cada 15 min</option></select></div>
+                    <div class="mt-auto"><button id="btnCargar" class="btn btn-primary w-100">Refrescar Datos</button></div>
+                </div>
+            </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="col-lg-9">
+      <div id="map" class="card position-relative mb-3">
+        <div id="legend" class="legend position-absolute" style="bottom:10px; left:10px; z-index:401;">
+          <div><i style="background:#2b8cbe;"></i>Calidad</div><div><i style="background:#de2d26;"></i>Seguridad</div>
+          <div><i style="background:#238b45;"></i>Ambiental</div><div><i style="background:#9467bd;"></i>Atención</div>
+        </div>
+      </div>
+      <div class="row g-4">
+        <div class="col-xl-6"><div class="card p-2 chart-container-large"><h6 class="px-2 pt-2">Series temporales (día)</h6><canvas id="ch_serie"></canvas></div></div>
+        <div class="col-xl-6"><div class="card p-2 chart-container-large"><h6 class="px-2 pt-2">Barras por clase</h6><canvas id="ch_clase"></canvas></div></div>
+        <div class="col-xl-6"><div class="card p-2 chart-container"><h6 class="px-2 pt-2">TOP 15 Municipios</h6><canvas id="ch_mpio"></canvas></div></div>
+        <div class="col-xl-6"><div class="card p-2 chart-container"><h6 class="px-1 pt-1">Distribución por Estado</h6><canvas id="ch_estado"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-5">
+    <div class="col-12">
+      <div class="card p-2">
+        <div class="d-flex justify-content-between align-items-center px-2 pt-2">
+          <h6 class="m-0">Tabla de Quejas</h6><small id="lastUpdate" class="text-muted"></small>
+        </div>
+        <table id="tbl" class="table table-striped" style="width:100%">
+          <thead><tr><th>Fecha</th><th>Clase</th><th>Estado</th><th>Depto</th><th>Municipio</th><th>Obra</th><th>Descripción</th><th>Foto</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://unpkg.com/leaflet.fullscreen@2.4.0/Control.FullScreen.js"></script>
+
+
+<script>
+/* ====== Utiles ====== */
+const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQn2MHK3NUuBdYQjbqAbirqFehZuiWyO2puRSB-ukJO9-TC7rxeyl9kXLW0nmClNQ/pub?output=csv";
+const CLASS_COLOR = { "Calidad":"#2b8cbe", "Seguridad":"#de2d26", "Ambiental":"#238b45", "Atencion":"#9467bd" };
+
+function iconByClase(c){
+  const color = CLASS_COLOR[c] || "#333";
+  const svg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="10" fill="${color}" stroke="white" stroke-width="2"/></svg>`);
+  return L.icon({iconUrl:`data:image/svg+xml,${svg}`, iconSize:[28,28], iconAnchor:[14,14]});
+}
+function toISODate(d){
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), da = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${da}`;
+}
+function uniq(arr){
+  return [...new Set(arr.filter(Boolean))].sort();
+}
+function normalizeKeys(obj) {
+  const newObj = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      newObj[key.toUpperCase()] = obj[key];
+    }
+  }
+  return newObj;
+}
+
+/* ====== Estado ====== */
+let RAW=[], FILTROS={}, MAP, MARKERS, DT, CH_SERIE, CH_CLASE, CH_MPIO, CH_ESTADO, refreshTimer=null;
+let DEPTOS_TO_MPIOS = {};
+
+/* ====== AJUSTE DE LAYOUT (ELIMINADA LA FUNCIÓN DINÁMICA DE ALTURA DEL MAPA) ====== */
+
+/* ====== Mapa ====== */
+function initMap(){
+  // --- Capas base (mapas de fondo) ---
+  const openStreetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+  const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' });
+  const cartoDBDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© CartoDB' });
+
+  // --- NUEVO: Se crean dos capas para las quejas ---
+  const quejasNormales = L.layerGroup(); // Capa para todos los puntos
+  const quejasAgrupadas = L.markerClusterGroup(); // Capa para los clusters
+
+  // Se asignan las capas a la variable global MARKERS para que el resto del código las pueda usar
+  MARKERS = {
+    normal: quejasNormales,
+    cluster: quejasAgrupadas
+  };
+
+  MAP = L.map('map', {
+    layers: [openStreetMap, quejasNormales], // Se carga el mapa con las quejas normales por defecto
+    fullscreenControl: true,
+  }).setView([4.6,-74.1], 6);
+  
+  // --- MODIFICADO: El control de capas ahora tiene mapas base y capas de datos ---
+  const baseMaps = {
+    "Calles": openStreetMap,
+    "Satélite": esriSatellite,
+    "Oscuro": cartoDBDark
+  };
+
+  const overlayMaps = {
+    "Mostrar Todas las Quejas": quejasNormales,
+    "Agrupar Quejas (Cluster)": quejasAgrupadas
+  };
+  
+  L.control.layers(baseMaps, overlayMaps).addTo(MAP); // Se añade el control completo
+}
+/* ====== Carga de CSV ====== */
+function papaParseUrl(url){
+  return new Promise((resolve,reject) => {
+    Papa.parse(url, {
+      download: true, header: true, dynamicTyping: false, skipEmptyLines: true,
+      complete: (res) => resolve(res.data),
+      error: (err) => reject(err)
+    });
+  });
+}
+async function loadCsvWithFallback(urlBase){
+  const url = urlBase + (urlBase.includes('?') ? '&' : '?') + '_=' + Date.now();
+  try { return await papaParseUrl(url); }
+  catch(e1) { console.warn('Fallo carga directa CSV:', e1); }
+  const proxies = ['https://api.allorigins.win/raw?url=', 'https://cors.isomorphic-git.org/'];
+  for (const px of proxies){
+    try {
+      const proxied = px + encodeURIComponent(url);
+      const data = await papaParseUrl(proxied);
+      document.getElementById('lastUpdate').textContent = "Última carga (vía proxy CORS): " + new Date().toLocaleString();
+      return data;
+    } catch(e2) { console.warn('Fallo via proxy', px, e2); }
+  }
+  throw new Error('No se pudo descargar el CSV (directo ni con fallback).');
+}
+function parseDateAny(v){
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+async function loadUrl(){
+  const btn = document.getElementById('btnCargar');
+  btn.disabled = true;
+  btn.textContent = 'Cargando...';
+  let base = GOOGLE_SHEET_URL;
+
+  try {
+    let rows = await loadCsvWithFallback(base);
+    if (!rows || rows.length === 0) {
+      alert("Los datos no se pudieron cargar o el archivo CSV está vacío.");
+      return;
+    }
+    const normalizedRows = rows.map(normalizeKeys);
+    
+    RAW = normalizedRows.map(r => {
+      const fecha = parseDateAny(r["FECHA_REGISTRO"]);
+      const lat = Number(String(r["LATITUD"] || "").replace(",", "."));
+      const lon = Number(String(r["LONGITUD"] || "").replace(",", "."));
+      return {
+        ID_QUEJA: r["ID_QUEJA"]||"", FECHA: fecha, FECHA_TXT: fecha ? new Date(fecha).toLocaleString() : "",
+        FECHA_DIA: fecha ? toISODate(new Date(fecha)) : "", DEPARTAMENTO: r["DEPARTAMENTO"]||"",
+        MUNICIPIO: r["MUNICIPIO"]||"", OBRA_NUMERO: Number(r["OBRA_NUMERO"]||0),
+        CLASE_QUEJA: r["CLASE_QUEJA"]||"", ESTADO_QUEJA: r["ESTADO_QUEJA"]||"",
+        DESCRIPCION: r["DESCRIPCION"]||"", RECEPTOR: r["RECEPTOR"]||"",
+        FUENTE_CAPTURA: r["FUENTE_CAPTURA"]||"", LATITUD: isNaN(lat)? null: lat,
+        LONGITUD: isNaN(lon)? null: lon, FOTO_URL: r["FOTO_URL"]||"",
+        DIAS_DESDE_REPORTE: Number(r["DIAS_DESDE_REPORTE"]||0), SEMANA_REPORTE: Number(r["SEMANA_REPORTE"]||0),
+        MES_REPORTE: r["MES_REPORTE"]||"", AÑO_REPORTE: Number(r["AÑO_REPORTE"]||0),
+        COORDENADAS_GEOM: r["COORDENADAS_GEOM"]||"", REGION_OPERATIVA: r["REGION_OPERATIVA"]||"",
+        OBSERVACIONES_GESTION: r["OBSERVACIONES_GESTION"]||""
+      };
+    });
+    
+    DEPTOS_TO_MPIOS = {};
+    RAW.forEach(r => {
+      if (!r.DEPARTAMENTO || !r.MUNICIPIO) return;
+      if (!DEPTOS_TO_MPIOS[r.DEPARTAMENTO]) {
+        DEPTOS_TO_MPIOS[r.DEPARTAMENTO] = new Set();
+      }
+      DEPTOS_TO_MPIOS[r.DEPARTAMENTO].add(r.MUNICIPIO);
+    });
+
+    setOptions('fclase', uniq(RAW.map(r=>r.CLASE_QUEJA)));
+    setOptions('festado', uniq(RAW.map(r=>r.ESTADO_QUEJA)));
+    setOptions('fdepto', uniq(RAW.map(r=>r.DEPARTAMENTO)));
+    setOptions('fmpio',  uniq(RAW.map(r=>r.MUNICIPIO)));
+    setOptions('fobra',  uniq(RAW.map(r=>r.OBRA_NUMERO).filter(v=>v)));
+    applyFiltersAndRender();
+    if (!document.getElementById('lastUpdate').textContent.includes('proxy')) {
+      document.getElementById('lastUpdate').textContent = "Última carga: " + new Date().toLocaleString();
+    }
+  } catch(e) {
+    console.error("Error fatal al cargar o procesar datos:", e);
+    alert("No pude leer el CSV. Revisa la consola para más detalles (F12).");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Refrescar Datos';
+  }
+}
+function setOptions(id, arr){
+  const el = document.getElementById(id);
+  el.innerHTML = `<option value="">(${id==='fobra'?'todas':'todos'})</option>` + arr.map(v => `<option>${v}</option>`).join('');
+}
+
+/* ====== Filtros ====== */
+function readFilters(){
+  FILTROS = {
+    desde: document.getElementById('fdesde').value ? new Date(document.getElementById('fdesde').value + "T00:00:00") : null,
+    hasta: document.getElementById('fhasta').value ? new Date(document.getElementById('fhasta').value + "T23:59:59") : null,
+    clase: document.getElementById('fclase').value || null,
+    estado: document.getElementById('festado').value || null,
+    depto: document.getElementById('fdepto').value || null,
+    mpio: document.getElementById('fmpio').value || null,
+    obra: document.getElementById('fobra').value || null
+  };
+}
+function applyFiltersAndRender(){
+  readFilters();
+  let LST = RAW.slice();
+  if (FILTROS.desde) LST = LST.filter(r => r.FECHA && r.FECHA >= FILTROS.desde);
+  if (FILTROS.hasta) LST = LST.filter(r => r.FECHA && r.FECHA <= FILTROS.hasta);
+  if (FILTROS.clase)  LST = LST.filter(r => r.CLASE_QUEJA === FILTROS.clase);
+  if (FILTROS.estado) LST = LST.filter(r => r.ESTADO_QUEJA === FILTROS.estado);
+  if (FILTROS.depto)  LST = LST.filter(r => r.DEPARTAMENTO === FILTROS.depto);
+  if (FILTROS.mpio)   LST = LST.filter(r => r.MUNICIPIO === FILTROS.mpio);
+  if (FILTROS.obra)   LST = LST.filter(r => String(r.OBRA_NUMERO) === String(FILTROS.obra));
+  renderAll(LST);
+}
+
+/* ====== Render ====== */
+function renderAll(list){
+  // KPIs
+  const total = list.length;
+  k_total.textContent = total;
+  const byClass = {Calidad:0, Seguridad:0, Ambiental:0, Atencion:0};
+  list.forEach(r => { if(byClass[r.CLASE_QUEJA] != null) byClass[r.CLASE_QUEJA]++; });
+  const pct = k => total ? ((byClass[k] * 100 / total).toFixed(1) + '%') : '0%';
+  k_pct_calidad.textContent = pct('Calidad');
+  k_pct_seguridad.textContent = pct('Seguridad');
+  k_pct_ambiental.textContent = pct('Ambiental');
+  k_pct_atencion.textContent = pct('Atencion');
+  const now = new Date(), h24 = new Date(now - 24 * 3600 * 1000), d7 = new Date(now - 7 * 24 * 3600 * 1000), d30 = new Date(now - 30 * 24 * 3600 * 1000);
+  k_24h.textContent = list.filter(r => r.FECHA && r.FECHA >= h24).length;
+  k_7d.textContent = list.filter(r => r.FECHA && r.FECHA >= d7).length;
+  k_30d.textContent = list.filter(r => r.FECHA && r.FECHA >= d30).length;
+  
+  // Mapa
+  MARKERS.normal.clearLayers();
+  MARKERS.cluster.clearLayers();
+  
+  const bds = [];
+  
+  list.forEach(r => {
+    if (r.LATITUD == null || r.LONGITUD == null) return;
+    
+    // Se crea el contenido del pop-up una sola vez para ser más eficiente
+    const foto = r.FOTO_URL ? `<div class="mt-1"><a href="${r.FOTO_URL}" target="_blank">Ver foto</a></div>` : '';
+    const popupContent = `<b>${r.CLASE_QUEJA||'(sin clase)'}</b> <span class="badge bg-secondary">Obra ${r.OBRA_NUMERO||'-'}</span><br/>${r.DEPARTAMENTO} / ${r.MUNICIPIO}<br/><small>${r.FECHA_TXT||''}</small><br/><em>${r.DESCRIPCION||''}</em>${foto}`;
+
+    // --- CAMBIO: Se crean y añaden marcadores a AMBAS capas ---
+    const markerOptions = { icon: iconByClase(r.CLASE_QUEJA) };
+    
+    // 1. Se añade el marcador a la capa normal
+    MARKERS.normal.addLayer(L.marker([r.LATITUD, r.LONGITUD], markerOptions).bindPopup(popupContent));
+    
+    // 2. Se añade el marcador a la capa de cluster
+    MARKERS.cluster.addLayer(L.marker([r.LATITUD, r.LONGITUD], markerOptions).bindPopup(popupContent));
+
+    bds.push([r.LATITUD, r.LONGITUD]);
+  });
+  
+  if (bds.length) MAP.fitBounds(bds, {padding: [20,20]});
+
+  // Charts
+  const byDate={}, byClase={}, byMpio={}, byEstado={};
+  list.forEach(r => {
+    if (r.FECHA_DIA) byDate[r.FECHA_DIA] = (byDate[r.FECHA_DIA] || 0) + 1;
+    if (r.CLASE_QUEJA) byClase[r.CLASE_QUEJA] = (byClase[r.CLASE_QUEJA] || 0) + 1;
+    if (r.MUNICIPIO) byMpio[r.MUNICIPIO] = (byMpio[r.MUNICIPIO] || 0) + 1;
+    if (r.ESTADO_QUEJA) byEstado[r.ESTADO_QUEJA] = (byEstado[r.ESTADO_QUEJA] || 0) + 1;
+  });
+
+  const chartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } };
+  const pieOptions = { responsive: true, maintainAspectRatio: false };
+
+  if (CH_SERIE) CH_SERIE.destroy();
+  const dlabels = Object.keys(byDate).sort(), dvalues = dlabels.map(k => byDate[k]);
+  CH_SERIE = new Chart(document.getElementById('ch_serie'), {type: 'line', data: {labels: dlabels, datasets:[{label: 'Quejas/día', data: dvalues}]}, options: chartOptions});
+
+  if (CH_CLASE) CH_CLASE.destroy();
+  const cLabels = Object.keys(byClase), cValues = cLabels.map(k => byClase[k]);
+  CH_CLASE = new Chart(document.getElementById('ch_clase'), {type: 'bar', data: {labels: cLabels, datasets:[{label: '# por clase', data: cValues, backgroundColor: cLabels.map(k => CLASS_COLOR[k] || '#777')}]}, options: chartOptions});
+  
+  if (CH_MPIO) CH_MPIO.destroy();
+  const mpioEntries = Object.entries(byMpio).sort((a,b) => b[1] - a[1]).slice(0, 15);
+  const mLabels = mpioEntries.map(x => x[0]), mValues = mpioEntries.map(x => x[1]);
+  CH_MPIO = new Chart(document.getElementById('ch_mpio'), {type: 'bar', data: {labels: mLabels, datasets:[{label: 'Quejas', data: mValues}]}, options: {...chartOptions, plugins: {legend: {display: false}}}});
+  
+  if (CH_ESTADO) CH_ESTADO.destroy();
+  const eLabels = Object.keys(byEstado), eValues = eLabels.map(k => byEstado[k]);
+  CH_ESTADO = new Chart(document.getElementById('ch_estado'), {type: 'pie', data: {labels: eLabels, datasets:[{data: eValues}]}, options: pieOptions});
+
+  // Tabla
+  const tableRows = list.map(r => [r.FECHA_TXT||'', r.CLASE_QUEJA||'', r.ESTADO_QUEJA||'', r.DEPARTAMENTO||'', r.MUNICIPIO||'', r.OBRA_NUMERO||'', (r.DESCRIPCION||'').slice(0, 160), r.FOTO_URL ? `<a href="${r.FOTO_URL}" target="_blank">foto</a>` : '']);
+  if (!DT) {
+    DT = $('#tbl').DataTable({data: tableRows, columns:[{title:'Fecha'},{title:'Clase'},{title:'Estado'},{title:'Depto'},{title:'Municipio'},{title:'Obra'},{title:'Descripción'},{title:'Foto'}], order:[[0,'desc']]});
+  } else {
+    DT.clear(); DT.rows.add(tableRows); DT.draw();
+  }
+  window._LAST_FILTERED = list;
+}
+
+/* ====== Export y Eventos ====== */
+function downloadCSV(rows){
+  const headers=["ID_QUEJA","FECHA_REGISTRO","DEPARTAMENTO","MUNICIPIO","OBRA_NUMERO","CLASE_QUEJA","ESTADO_QUEJA","DESCRIPCION","RECEPTOR","FUENTE_CAPTURA","LATITUD","LONGITUD","FOTO_URL","DIAS_DESDE_REPORTE","SEMANA_REPORTE","MES_REPORTE","AÑO_REPORTE","COORDENADAS_GEOM","REGION_OPERATIVA","OBSERVACIONES_GESTION"];
+  const lines=[headers.join(",")];
+  rows.forEach(r => {
+    const vals=[r.ID_QUEJA,r.FECHA?new Date(r.FECHA).toISOString():"",r.DEPARTAMENTO,r.MUNICIPIO,r.OBRA_NUMERO,r.CLASE_QUEJA,r.ESTADO_QUEJA,(r.DESCRIPCION||"").replace(/\n/g," ").replace(/,/g,";"),r.RECEPTOR,r.FUENTE_CAPTURA,r.LATITUD,r.LONGITUD,r.FOTO_URL,r.DIAS_DESDE_REPORTE,r.SEMANA_REPORTE,r.MES_REPORTE,r.AÑO_REPORTE,`"${r.COORDENADAS_GEOM}"`,r.REGION_OPERATIVA,(r.OBSERVACIONES_GESTION||"").replace(/\n/g," ").replace(/,/g,";")];
+    lines.push(vals.join(","));
+  });
+  const blob = new Blob([lines.join("\n")], {type: "text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "quejas_filtrado.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+function setAutoRefresh(){
+  if (refreshTimer) clearInterval(refreshTimer);
+  const sec = parseInt(document.getElementById('autoRefresh').value || "0", 10);
+  if (sec > 0) {
+    refreshTimer = setInterval(() => document.getElementById('btnCargar').click(), sec * 1000);
+  }
+}
+document.getElementById('btnCargar').onclick = loadUrl;
+document.getElementById('btnFiltrar').onclick = applyFiltersAndRender;
+document.getElementById('btnLimpiar').onclick = () => {
+  ['fdesde','fhasta','fclase','festado','fdepto','fmpio','fobra'].forEach(id => document.getElementById(id).value = '');
+  setOptions('fmpio', uniq(RAW.map(r => r.MUNICIPIO)));
+  applyFiltersAndRender();
+};
+document.getElementById('btnCSV').onclick = () => downloadCSV(window._LAST_FILTERED || []);
+document.getElementById('autoRefresh').onchange = setAutoRefresh;
+document.getElementById('fdepto').addEventListener('change', e => {
+  const depto = e.target.value;
+  let mpios = [];
+  if (depto && DEPTOS_TO_MPIOS[depto]) {
+    mpios = [...DEPTOS_TO_MPIOS[depto]].sort();
+  } else {
+    mpios = uniq(RAW.map(r => r.MUNICIPIO));
+  }
+  setOptions('fmpio', mpios);
+});
+
+// Restaurado: Se elimina el listener de resize para el mapa dinámico.
+// window.addEventListener('resize', adjustMapHeight); 
+
+initMap();
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btnCargar').click();
+  setAutoRefresh();
+});
+</script>
+</body>
+</html>
