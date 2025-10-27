@@ -176,6 +176,26 @@ function normalizeKeys(obj) {
   return newObj;
 }
 
+function getDirectImageUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+
+  // 1. Convertir enlaces de Google Drive
+  if (url.includes("drive.google.com/file/d/")) {
+    const fileId = url.split('/d/')[1].split('/')[0];
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  }
+
+  // 2. Convertir enlaces de página de Imgur (ej: https://imgur.com/IMAGE_ID)
+  if (url.includes("imgur.com/") && !url.includes("i.imgur.com")) {
+    const parts = url.split('/');
+    const imageId = parts[parts.length - 1];
+    return `https://i.imgur.com/${imageId}.jpg`;
+  }
+  
+  // 3. Si ya es un enlace directo, lo devuelve sin cambios
+  return url;
+}
+
 /* ====== Estado ====== */
 let RAW=[], FILTROS={}, MAP, MARKERS, DT, CH_SERIE, CH_CLASE, CH_MPIO, CH_ESTADO, refreshTimer=null;
 let DEPTOS_TO_MPIOS = {};
@@ -364,10 +384,22 @@ function renderAll(list){
     if (r.LATITUD == null || r.LONGITUD == null) return;
     
     // Se crea el contenido del pop-up una sola vez para ser más eficiente
-    const foto = r.FOTO_URL ? `<div class="mt-1"><a href="${r.FOTO_URL}" target="_blank">Ver foto</a></div>` : '';
-    const popupContent = `<b>${r.CLASE_QUEJA||'(sin clase)'}</b> <span class="badge bg-secondary">Obra ${r.OBRA_NUMERO||'-'}</span><br/>${r.DEPARTAMENTO} / ${r.MUNICIPIO}<br/><small>${r.FECHA_TXT||''}</small><br/><em>${r.DESCRIPCION||''}</em>${foto}`;
+    
+    const directImageUrl = getDirectImageUrl(r.FOTO_URL);
 
-    // --- CAMBIO: Se crean y añaden marcadores a AMBAS capas ---
+    // 2. Después, creamos el código HTML para la imagen, pero solo si el enlace es válido
+    const foto = directImageUrl 
+      ? `<div class="mt-2 text-center">
+           <a href="${directImageUrl}" target="_blank">
+             <img src="${directImageUrl}" style="max-width: 200px; border-radius: 5px;" alt="Evidencia de la queja"/>
+           </a>
+         </div>` 
+      : '';
+
+    // 3. Finalmente, unimos todo para crear el contenido del popup
+    const popupContent = `<b>${r.CLASE_QUEJA||'(sin clase)'}</b> <span class="badge bg-secondary">Obra ${r.OBRA_NUMERO||'-'}</span><br/>${r.DEPARTAMENTO} / ${r.MUNICIPIO}<br/><small>${r.FECHA_TXT||''}</small><br/><em>${r.DESCRIPCION||''}</em>${foto}`;
+	
+	// --- CAMBIO: Se crean y añaden marcadores a AMBAS capas ---
     const markerOptions = { icon: iconByClase(r.CLASE_QUEJA) };
     
     // 1. Se añade el marcador a la capa normal
